@@ -9,6 +9,10 @@
 #import "ViewController.h"
 #import <GameController/GameController.h>
 
+// Integration imports (added)
+#import "ViewController+AVIntegration.h"
+#import "AVExtractor.h"
+
 typedef struct _Input
 {
 	CGFloat x;
@@ -103,6 +107,14 @@ typedef struct _Input
 	
 	else if (presses.anyObject.type == UIPressTypePlayPause)
 	{
+		// Try to auto-detect a playable URL in the page and present the player
+		NSString *maybeURL = [AVExtractor extractPlayableURLFromWebView:self.webview];
+		if (maybeURL && maybeURL.length > 0) {
+			[self presentAVPlayerWithURLString:maybeURL];
+			return;
+		}
+		
+		// Fallback: show address input alert (original behaviour)
 		UIAlertController *alertController = [UIAlertController
 											  alertControllerWithTitle:@"Enter Address"
 											  message:@""
@@ -130,7 +142,6 @@ typedef struct _Input
 		[alertController addAction:okAction];
 		
 		[self presentViewController:alertController animated:YES completion:nil];
-
 	}
 	else if (presses.anyObject.type == UIPressTypeUpArrow)
 	{
@@ -144,10 +155,30 @@ typedef struct _Input
 -(void)setupController
 {
 	self.controller = [GCController controllers].firstObject;
-	self.controller.microGamepad.dpad.valueChangedHandler = ^(GCControllerDirectionPad *pad, float x, float y) {
-		input.x = x;
-		input.y = -y;
-	};
+	
+	if (!self.controller)
+		return;
+	
+	self.controller.playerIndex = 0;
+	
+	if (self.controller.microGamepad)
+	{
+		self.controller.microGamepad.valueChangedHandler = ^(GCMicroGamepad *gamepad, float x, float y) {
+			// use dpad for movement
+		};
+		
+		self.controller.microGamepad.reportsAbsoluteDpadValues = NO;
+	}
+	else if (self.controller.extendedGamepad)
+	{
+		// handle extended controller if needed
+	}
+	
+	if (self.controller.microGamepad.dpad)
+		self.controller.microGamepad.dpad.valueChangedHandler = ^(GCControllerDirectionPad *pad, float x, float y) {
+			input.x = x;
+			input.y = -y;
+		};
 }
 
 -(void)updateCursor
@@ -158,7 +189,7 @@ typedef struct _Input
 		return;
 	
 	if (input.x != 0)
-	cursorView.transform = CGAffineTransformTranslate(cursorView.transform, pow(2,delta*fabs(input.x))*(input.x>0?1:-1), 0);
+		cursorView.transform = CGAffineTransformTranslate(cursorView.transform, pow(2,delta*fabs(input.x))*(input.x>0?1:-1), 0);
 	
 	if (input.y != 0)
 		cursorView.transform = CGAffineTransformTranslate(cursorView.transform, 0, pow(2,delta*fabs(input.y))*(input.y>0?1:-1));
